@@ -14,17 +14,25 @@ type Otq struct {
 	scheduler        *asynq.Scheduler
 	scheduledTaskIds []string
 	client           *asynq.Client
+	logger           Logger
 }
 
 var instance *Otq
 
-func NewOtq(redisAddress string, redisUsername string, redisPassword string, db int) *Otq {
+func NewOtq(redisAddress string, redisUsername string, redisPassword string, db int, logger ...Logger) *Otq {
 	if instance != nil {
 		jog.Warn("OTQ is already initialized")
 		return instance
 	}
 	if redisAddress == "" {
 		jog.Panic("redis address is empty")
+	}
+
+	var lg Logger
+	if len(logger) > 0 && logger[0] != nil {
+		lg = logger[0]
+	} else {
+		lg = jog.New().GetZapSugarLogger()
 	}
 
 	redConnOpts := asynq.RedisClientOpt{
@@ -47,7 +55,7 @@ func NewOtq(redisAddress string, redisUsername string, redisPassword string, db 
 			"default":  3,
 			"low":      1,
 		},
-		Logger:                   jog.GetSugar(),
+		Logger:                   lg,
 		ShutdownTimeout:          10 * time.Second,
 		HealthCheckInterval:      10 * time.Second,
 		DelayedTaskCheckInterval: 5 * time.Second,
@@ -65,7 +73,7 @@ func NewOtq(redisAddress string, redisUsername string, redisPassword string, db 
 		loc = time.UTC
 	}
 	aScheduler := asynq.NewScheduler(redConnOpts, &asynq.SchedulerOpts{
-		Logger:   jog.GetSugar(),
+		Logger:   lg,
 		Location: loc,
 	})
 
@@ -76,6 +84,7 @@ func NewOtq(redisAddress string, redisUsername string, redisPassword string, db 
 		asynqServerMux: asynq.NewServeMux(),
 		scheduler:      aScheduler,
 		client:         aClient,
+		logger:         lg,
 	}
 
 	return instance
